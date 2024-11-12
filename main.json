@@ -1,0 +1,125 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.31.34.60546",
+      "templateHash": "14066053662925299250"
+    }
+  },
+  "parameters": {
+    "azurehoundTenant": {
+      "type": "string",
+      "metadata": {
+        "description": "The directory tenant that you want to request permission from. This can be in GUID or friendly name format."
+      }
+    },
+    "azurehoundApp": {
+      "type": "string",
+      "metadata": {
+        "description": "The Application (client) Id that the Azure app registration portal assigned when the app was registered."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The location that the Azure resources should be deployed to."
+      }
+    },
+    "certificateSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The secret value for the certificate. base64 encoded"
+      }
+    },
+    "keySecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The secret value of the key.pem certificate. base64 encoded"
+      }
+    },
+    "AZUREHOUND_INSTANCE": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The BloodHound Enterprise instance URL."
+      }
+    },
+    "AZUREHOUND_TOKENID": {
+      "type": "securestring",
+      "metadata": {
+        "description": "BloodHound Enterprise token ID."
+      }
+    },
+    "AZUREHOUND_TOKEN": {
+      "type": "securestring",
+      "metadata": {
+        "description": "BloodHound Enterprise token."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2024-10-01-preview",
+      "name": "[format('azurehoundcontainer-group-{0}', uniqueString(resourceGroup().id))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "containers": [
+          {
+            "name": "azurehoundenterprise-1",
+            "properties": {
+              "image": "ghcr.io/bloodhoundad/azurehound:latest",
+              "resources": {
+                "requests": {
+                  "cpu": 1,
+                  "memoryInGB": 2
+                }
+              },
+              "command": [
+                "/azurehound",
+                "list"
+              ],
+              "volumeMounts": [
+                {
+                  "name": "azurehound-volume",
+                  "mountPath": "/etc/azurehound"
+                }
+              ],
+              "environmentVariables": [
+                {
+                  "name": "AZUREHOUND_TENANT",
+                  "value": "[parameters('azurehoundTenant')]"
+                },
+                {
+                  "name": "AZUREHOUND_APP",
+                  "value": "[parameters('azurehoundApp')]"
+                },
+                {
+                  "name": "AZUREHOUND_CERT",
+                  "value": "/etc/azurehound/tls.crt"
+                },
+                {
+                  "name": "AZUREHOUND_KEY",
+                  "value": "/etc/azurehound/tls.key"
+                }
+              ]
+            }
+          }
+        ],
+        "osType": "Linux",
+        "restartPolicy": "Never",
+        "volumes": [
+          {
+            "name": "azurehound-volume",
+            "secret": {
+              "tls.crt": "[parameters('certificateSecret')]",
+              "tls.key": "[parameters('keySecret')]"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

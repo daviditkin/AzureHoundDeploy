@@ -1,11 +1,16 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.1-experimental",
   "contentVersion": "1.0.0.0",
   "metadata": {
+    "_EXPERIMENTAL_WARNING": "This template uses ARM features that are experimental. Experimental features should be enabled for testing purposes only, as there are no guarantees about the quality or stability of these features. Do not enable these settings for any production usage, or your production environment may be subject to breaking.",
+    "_EXPERIMENTAL_FEATURES_ENABLED": [
+      "Extensibility"
+    ],
     "_generator": {
       "name": "bicep",
-      "version": "0.31.34.60546",
-      "templateHash": "14066053662925299250"
+      "version": "0.31.92.45157",
+      "templateHash": "2025508468265261875"
     }
   },
   "parameters": {
@@ -59,12 +64,53 @@
       }
     }
   },
-  "resources": [
-    {
+  "variables": {
+    "$fxv#0": "# Create the Azure AD application.\napplication=$(az ad app create --display-name $AzureADApplicationName)\napplicationObjectId=$(jq -r '.id' <<< \"$application\")\napplicationClientId=$(jq -r '.appId' <<< \"$application\")\n\n#\n# Add Microsoft Graph API permissions to the application.\npermission=$(az ad app permission add --id $applicationObjectId --api 00000003-0000-0000-c000-000000000000 --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role)\n\n# Add User.Read permission\npermission=$(az ad app permission add --id $applicationObjectId --api 00000003-0000-0000-c000-000000000000 --api-permissions 64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0=Role)\n\n## Don't grant use admin consent instead\n#\ngrant=$(az ad app permission grant --id $applicationObjectId --api 00000003-0000-0000-c000-000000000000 --scope User.Read)\ngrant2=$(az ad app permission grant --id $applicationObjectId --api 00000003-0000-0000-c000-000000000000 --scope Directory.Read.All)\n#\n\n# Admin consent\naz ad app permission admin-consent --id $applicationObjectId\n\n# Upload the certificate to the application.\n\n# # - Create a self-signed certificate\n# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout mycert.pem -out mycert.pem -subj \"/CN=$AzureADApplicationName\"\n# openssl pkcs12 -export -out mycert.pfx -in mycert.pem -passout pass:$AzureADApplicationPassword\n\n# # - Upload the certificate to the application\n# az ad app credential reset --id $applicationObjectId --cert @mycert.pem --keyvault $KeyVaultName\n\necho $outputJson > $AZ_SCRIPTS_OUTPUT_PATH\n"
+  },
+  "imports": {
+    "MicrosoftGraph": {
+      "provider": "MicrosoftGraph",
+      "version": "0.1.8-preview"
+    }
+  },
+  "resources": {
+    "deploymentScript": {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "AzureHoundEnterpriseDeploymentScript",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "properties": {
+        "forceUpdateTag": "1",
+        "azCliVersion": "2.40.0",
+        "environmentVariables": [
+          {
+            "name": "AZUREHOUND_INSTANCE",
+            "value": "[parameters('AZUREHOUND_INSTANCE')]"
+          },
+          {
+            "name": "AZUREHOUND_TOKENID",
+            "value": "[parameters('AZUREHOUND_TOKENID')]"
+          },
+          {
+            "name": "AZUREHOUND_TOKEN",
+            "value": "[parameters('AZUREHOUND_TOKEN')]"
+          }
+        ],
+        "scriptContent": "[variables('$fxv#0')]",
+        "timeout": "PT30M",
+        "cleanupPreference": "Always",
+        "retentionInterval": "PT1H"
+      }
+    },
+    "AzureHoundContainerInstance": {
       "type": "Microsoft.ContainerInstance/containerGroups",
       "apiVersion": "2024-10-01-preview",
       "name": "[format('azurehoundcontainer-group-{0}', uniqueString(resourceGroup().id))]",
       "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "containers": [
           {
@@ -120,6 +166,31 @@
           }
         ]
       }
+    },
+    "roleAssignment1": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2020-04-01-preview",
+      "name": "[guid(subscription().id, 'Microsoft.Authorization', 'roleAssignments', 'myRoleAssignment')]",
+      "properties": {
+        "principalId": "[reference('AzureHoundContainerInstance').identity.principalId]",
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9')]"
+      },
+      "dependsOn": [
+        "AzureHoundContainerInstance"
+      ]
+    },
+    "roleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2021-04-01-preview",
+      "scope": "[format('Microsoft.ContainerInstance/containerGroups/{0}', format('azurehoundcontainer-group-{0}', uniqueString(resourceGroup().id)))]",
+      "name": "AzureHoundContainerInstanceRoleAssignment",
+      "properties": {
+        "principalId": "[reference('AzureHoundContainerInstance').identity.principalId]",
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+      },
+      "dependsOn": [
+        "AzureHoundContainerInstance"
+      ]
     }
-  ]
+  }
 }

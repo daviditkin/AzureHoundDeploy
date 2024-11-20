@@ -1,3 +1,5 @@
+extension microsoftGraphV1
+
 // @description('The name of the user-assigned managed identity that has permission to create Azure AD applications.')
 // param managedIdentityName string
 
@@ -36,6 +38,7 @@ param AZUREHOUND_TOKENID string
 @secure()
 param AZUREHOUND_TOKEN string
 
+
 // resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' existing = {
 //   name: managedIdentityName
 //   scope: resourceGroup(managedIdentityResourceGroupName)
@@ -68,9 +71,52 @@ param AZUREHOUND_TOKEN string
 //   }
 // }
 
+resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  name: 'AzureHoundEnterpriseDeploymentScript'
+  location: location
+  kind: 'AzureCLI'
+  properties: {
+    forceUpdateTag: '1'
+    azCliVersion: '2.40.0'
+    environmentVariables: [
+      {
+        name: 'AZUREHOUND_INSTANCE'
+        value: AZUREHOUND_INSTANCE
+      }
+      {
+        name: 'AZUREHOUND_TOKENID'
+        value: AZUREHOUND_TOKENID
+      }
+      {
+        name: 'AZUREHOUND_TOKEN'
+        value: AZUREHOUND_TOKEN
+      }
+    ]
+    scriptContent: loadTextContent('scripts/create-application.sh')
+    timeout: 'PT30M'
+    cleanupPreference: 'Always'
+    retentionInterval: 'PT1H'
+  }
+}
+
+resource myManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-07-31-preview' = {
+  name: 'myManagedIdentity'
+  location: location
+}
+
+// TODO: Set up managed identity on container group
+// https://learn.microsoft.com/en-us/azure/container-instances/container-instances-managed-identity
+//
 resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroups@2024-10-01-preview' = {
   name: 'azurehoundcontainer-group-${uniqueString(resourceGroup().id)}'
   location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${myManagedIdentity.id}': {}
+    }
+
+  }
   properties: {
     containers: [
       {
@@ -130,6 +176,24 @@ resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroup
   // dependsOn: [
   //   createAzureADApplicationScript
   // ]
+}
+
+resource roleAssignment1 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(subscription().id, 'Microsoft.Authorization', 'roleAssignments', 'myRoleAssignment')
+  properties: {
+    principalId: AzureHoundContainerInstance.properties.identity.principalId
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9') // Role ID for User.Read.All
+  }
+}
+
+// Assign Role to the system assigned identity of the container group
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2021-04-01-preview' = {
+  name: 'AzureHoundContainerInstanceRoleAssignment'
+  scope: AzureHoundContainerInstance
+  properties: {
+    principalId: AzureHoundContainerInstance.properties.identity.principalId
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')  // Should this be subscriptionResourceId or resourceId? TODO: Check
+  }
 }
 
 // output applicationObjectId string = createAzureADApplicationScript.properties.outputs.applicationObjectId

@@ -13,13 +13,18 @@ permission2=$(az ad app permission add --id $applicationObjectId --api 00000003-
 # Admin consent
 az ad app permission admin-consent --id $applicationObjectId
 
-# Upload the certificate to the application.
+# Create a managed identity for the application
+identity=$(az identity create --name $AzureADApplicationName --resource-group $ResourceGroupName)
+identityClientId=$(jq -r '.clientId' <<< "$identity")
+identityObjectId=$(jq -r '.id' <<< "$identity")
 
-# # - Create a self-signed certificate
-# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout mycert.pem -out mycert.pem -subj "/CN=$AzureADApplicationName"
-# openssl pkcs12 -export -out mycert.pfx -in mycert.pem -passout pass:$AzureADApplicationPassword
+# TODO: This is wrong fix it
+# Assign the managed identity to the application or the service principal of the application
+# Assign the managed identity to the service principal of the application
+servicePrincipal=$(az ad sp create --id $applicationClientId)
+servicePrincipalObjectId=$(jq -r '.id' <<< "$servicePrincipal")
 
-# # - Upload the certificate to the application
-# az ad app credential reset --id $applicationObjectId --cert @mycert.pem --keyvault $KeyVaultName
+# # Assign the managed identity to the service principal
+# az role assignment create --assignee $identityClientId --role Contributor --scope /subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName
 
 echo $outputJson > $AZ_SCRIPTS_OUTPUT_PATH

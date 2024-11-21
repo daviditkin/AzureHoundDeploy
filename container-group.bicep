@@ -34,7 +34,7 @@ resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '{DeploymentScriptManagedIdentity.id}': {}
+      '${DeploymentScriptManagedIdentity.id}': {}
     }
   }
   properties: {

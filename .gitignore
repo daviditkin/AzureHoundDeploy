@@ -1,0 +1,28 @@
+# Ignore the generated ARM template file
+main.json
+
+# Ignore Bicep cache files
+.bicep
+
+# Ignore local environment files
+.env
+.env.local
+
+# Ignore node_modules directory (if using Node.js for scripts or tools)
+node_modules/
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore MacOS system files
+.DS_Store
+
+# Ignore Windows system files
+Thumbs.db

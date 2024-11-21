@@ -1,10 +1,10 @@
 targetScope = 'resourceGroup'
 
-@description('The display name of the application to create in Azure AD.')
-param AzureADApplicationName string = 'AzureHoundEnterprise'
+@description('The name of the managed identity used by the deployment script. It must have the following permissions: [TBD]')
+param DEPLOYMENT_SCRIPT_MANAGED_IDENTITY string
 
-@description('The Azure AD tenant ID.')
-param azurehoundTenant string
+@description('The display name of the application to create in Azure AD.')
+param APPLICATION_NAME string = 'AzureHoundEnterprise'
 
 @description('The BloodHound Enterprise instance URL.')
 @secure()
@@ -18,70 +18,54 @@ param AZUREHOUND_TOKENID string
 @secure()
 param AZUREHOUND_TOKEN string
 
-resource MyManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-04-01-preview' = {
+resource DeploymentScriptManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: DEPLOYMENT_SCRIPT_MANAGED_IDENTITY
+}
+
+resource MyManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'AzureHoundManagedIdentity'
   location: resourceGroup().location
 }
-
-// resource deploymentScriptPWSH 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-//   name: 'AzureHoundEnterpriseDeploymentScriptPWSH'
-//   location: resourceGroup().location
-//   kind: 'AzurePowerShell'
-//   properties: {
-//     forceUpdateTag: '1'
-//     azPowerShellVersion: '7.0'
-//     environmentVariables: [
-//       {
-//         name: 'AzureADApplicationName'
-//         value: AzureADApplicationName
-//       }
-//       {
-//         name: 'ResourceGroupName'
-//         value: resourceGroup().name // Should be ID????
-//       }
-//       {
-//         name: 'MyManagedIdentityID'
-//         value: MyManagedIdentity.id
-//       }
-//     ]
-//     scriptContent: loadTextContent('scripts/create-application.ps1')
-//     timeout: 'PT30M'
-//     cleanupPreference: 'Always'
-//     retentionInterval: 'PT1H'
-//   }
-// }
 
 resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   name: 'AzureHoundEnterpriseDeploymentScript'
   location: resourceGroup().location
   kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '{DeploymentScriptManagedIdentity.id}': {}
+    }
+  }
   properties: {
     forceUpdateTag: '1'
     azCliVersion: '2.40.0'
     environmentVariables: [
       {
         name: 'AzureADApplicationName'
-        value: AzureADApplicationName
+        value: APPLICATION_NAME
       }
       {
         name: 'ResourceGroupName'
         value: resourceGroup().name // Should be ID????
       }
       {
-        name: 'MyManagedIdentityID'
-        value: MyManagedIdentity.id
+        name: 'ClientId'
+        value: MyManagedIdentity.properties.clientId
       }
     ]
-    scriptContent: loadTextContent('scripts/create-application.sh')
+    scriptContent: loadTextContent('scripts/managed-identity-permissions.sh')
     timeout: 'PT30M'
     cleanupPreference: 'Always'
     retentionInterval: 'PT1H'
   }
+  dependsOn: [
+    MyManagedIdentity
+  ]
 }
 
+
 // Create a container group with the managed identity
-// https://learn.microsoft.com/en-us/azure/container-instances/container-instances-managed-identity
-//
 resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroups@2024-10-01-preview' = {
   name: 'azurehoundcontainer-group-${uniqueString(resourceGroup().id)}'
   location: resourceGroup().location
@@ -116,10 +100,6 @@ resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroup
           environmentVariables: [
             // Azure Configuration
             {
-              name: 'AZUREHOUND_TENANT' 
-              value: azurehoundTenant
-            }
-            {
               name: 'AZUREHOUND_INSTANCE'
               value: AZUREHOUND_INSTANCE
             }
@@ -147,9 +127,9 @@ resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroup
       }
     ]
   }
-  // dependsOn: [
-  //   createAzureADApplicationScript
-  // ]
+  dependsOn: [
+    deploymentScript
+  ]
 }
 
 output AzureHoundContainerInstanceName string = AzureHoundContainerInstance.name

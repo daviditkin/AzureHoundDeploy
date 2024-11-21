@@ -1,5 +1,8 @@
 targetScope = 'subscription'
 
+@description('The name of the managed identity used by the deployment script. It must have the following permissions: [TBD]')
+param DeploymentScriptManagedIdentity string
+
 @description('The name of the resource group to create that will hold the Container Instance and Managed Identity.')
 param ResourceGroupName string = 'AzureHoundEnterprise'
 
@@ -8,9 +11,6 @@ param location string = 'eastus'
 
 @description('The display name of the application to create in Azure AD.')
 param AzureADApplicationName string = 'AzureHoundEnterprise'
-
-@description('The Azure AD tenant ID.')
-param azurehoundTenant string
 
 @description('The BloodHound Enterprise instance URL.')
 @secure()
@@ -35,12 +35,11 @@ module resourceGroupDeployment 'container-group.bicep' = {
   name: 'DeployResourcesInRG'
   scope: resourceGroup(ResourceGroupName)
   params: {
-    AzureADApplicationName: AzureADApplicationName
-    azurehoundTenant: azurehoundTenant
+    APPLICATION_NAME: AzureADApplicationName
     AZUREHOUND_INSTANCE: AZUREHOUND_INSTANCE
     AZUREHOUND_TOKENID: AZUREHOUND_TOKENID
     AZUREHOUND_TOKEN: AZUREHOUND_TOKEN
+    DEPLOYMENT_SCRIPT_MANAGED_IDENTITY: DeploymentScriptManagedIdentity
   }
 }
-
 

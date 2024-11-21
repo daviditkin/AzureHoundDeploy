@@ -1,8 +1,5 @@
 # AzureHoundDeploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/daviditkin/AzureHound/feature-azure-deployment/deploy/main.json)
-
-
 ## Notes About Approach
 ManagedIdentities can be assigned permissions just like App Registration (Enterprise Applications), however you are assigning the permissions to 
 the managed identity's application object id.  After creation of a Managed Identity it takes some amount of time before the application id is associated with the managed identity.  Therefore we add retry logic.

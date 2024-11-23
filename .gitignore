@@ -26,3 +26,4 @@ node_modules/
 
 # Ignore Windows system files
 Thumbs.db
+main.json

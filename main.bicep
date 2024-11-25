@@ -30,16 +30,15 @@ resource AppResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   location: location
 } 
 
-// Deploy the resources (app registration, managed identity, container group ...) in the resource group
-module resourceGroupDeployment 'container-group.bicep' = {
-  name: 'DeployResourcesInRG'
+module appRegistrationDeployment 'app-registration-container.bicep' = {
+  name: 'DeployAppRegistrationInRG'
   scope: resourceGroup(ResourceGroupName)
   params: {
+    DEPLOYMENT_SCRIPT_MANAGED_IDENTITY: DeploymentScriptManagedIdentity
     APPLICATION_NAME: AzureADApplicationName
     AZUREHOUND_INSTANCE: AZUREHOUND_INSTANCE
     AZUREHOUND_TOKENID: AZUREHOUND_TOKENID
     AZUREHOUND_TOKEN: AZUREHOUND_TOKEN
-    DEPLOYMENT_SCRIPT_MANAGED_IDENTITY: DeploymentScriptManagedIdentity
   }
 }
 

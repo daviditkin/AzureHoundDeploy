@@ -18,19 +18,16 @@ param AZUREHOUND_TOKENID string
 @secure()
 param AZUREHOUND_TOKEN string
 
+// This needs to provide permissions for the deployment script to create the application in Azure AD
 resource DeploymentScriptManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: DEPLOYMENT_SCRIPT_MANAGED_IDENTITY
 }
 
-resource MyManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'AzureHoundManagedIdentity'
-  location: resourceGroup().location
-}
-
+// Create App Registration with permissions
 resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   name: 'AzureHoundEnterpriseDeploymentScript'
   location: resourceGroup().location
-  kind: 'AzureCLI'
+  kind: 'PowerShell'
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -39,7 +36,7 @@ resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   }
   properties: {
     forceUpdateTag: '1'
-    azCliVersion: '2.40.0'
+    powerShellVersion: '7.0'
     environmentVariables: [
       {
         name: 'AzureADApplicationName'
@@ -47,39 +44,29 @@ resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
       }
       {
         name: 'ResourceGroupName'
-        value: resourceGroup().name // Should be ID????
-      }
-      {
-        name: 'ClientId'
-        value: MyManagedIdentity.properties.clientId
+        value: resourceGroup().name
       }
     ]
-    scriptContent: loadTextContent('scripts/managed-identity-permissions.sh')
+    scriptContent: loadTextContent('scripts/app-registration-permissions.ps1')
     timeout: 'PT30M'
     cleanupPreference: 'Always'
     retentionInterval: 'PT1H'
   }
   dependsOn: [
-    MyManagedIdentity
   ]
 }
-
 
 // Create a container group with the managed identity
 resource AzureHoundContainerInstance 'Microsoft.ContainerInstance/containerGroups@2024-10-01-preview' = {
   name: 'azurehoundcontainer-group-${uniqueString(resourceGroup().id)}'
   location: resourceGroup().location
   identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${MyManagedIdentity.id}': {}
-    }
-
+    type: 'SystemAssigned'
   }
   properties: {
     containers: [
       {
-        name: 'azurehoundenterprise-1'  // TODO: Change this to a unique name
+        name: APPLICATION_NAME  // TODO: Change this to a unique name
         properties: {
           image: 'ghcr.io/bloodhoundad/azurehound:latest'
           resources: {
